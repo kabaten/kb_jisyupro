@@ -25,5 +25,5 @@ class MyLink:
         th1 = np.arccos((p_norm**2 + self.l1**2 - self.l2**2)/(2*self.l1*p_norm)) + alpha
         th2 = np.arccos((p_norm**2 + self.l2**2 - self.l1**2)/(2*self.l2*p_norm)) - alpha
         
-        th = np.stack[th1, th2]
+        th = np.stack([th1, th2])
         return th
