@@ -52,7 +52,7 @@ class RoundNoGradient(torch.autograd.Function):
     def backward(ctx, g):
         return g
 
-class PlotLine2(nn.Module):
+class PlotLine(nn.Module):
     def __init__(self, img_size):
         super().__init__()
         self.img_size = img_size
@@ -95,7 +95,7 @@ class PlotLine2(nn.Module):
         #p_map0 = p_map
         return p_map0
 
-def process_img2(img):
+def process_img(img):
     img_np = np.array(img)
     img_np = ~img_np
     _, img_th = cv2.threshold(img_np, 0, 1, cv2.THRESH_OTSU)
@@ -104,13 +104,13 @@ def process_img2(img):
     # img_blr = img_blr.squeeze()
     return img_th
 
-class Discriminator2(nn.Module):
+class Discriminator(nn.Module):
     def __init__(self, img):
         super().__init__()
         self.img_size = len(img)
-        self.img = torch.from_numpy(process_img2(img)).clone().unsqueeze(0)
+        self.img = torch.from_numpy(process_img(img)).clone().unsqueeze(0)
         
-        self.plot_line = PlotLine2(self.img_size)
+        self.plot_line = PlotLine(self.img_size)
         #self.criterion = nn.MSELoss()
         self.criterion = nn.L1Loss()
         self.p_map = None
@@ -139,7 +139,7 @@ class Discriminator2(nn.Module):
 #         loss = (beta*((x - t)**2).sum())/(var + eps) + alpha*distance
         return loss
 
-class Generator2(nn.Module):
+class Generator(nn.Module):
     def __init__(self, img_size, n_point):
         super().__init__()
         self.n_point = n_point
@@ -180,14 +180,14 @@ def make_input(img):
     img = zscore(img)
     return torch.from_numpy(img).to(torch.float)
 
-def train_gen2(img, n_point=20, iteration = 2000):
+def train_gen(img, n_point=20, iteration = 2000):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'using: {device}')
     
     img_size = len(img)
     
-    gen = Generator2(img_size, n_point).to(device)
-    disc = Discriminator2(img).to(device)
+    gen = Generator(img_size, n_point).to(device)
+    disc = Discriminator(img).to(device)
     
     optimizer=optim.SGD(gen.parameters(), lr=0.001)
     
@@ -216,3 +216,25 @@ def train_gen2(img, n_point=20, iteration = 2000):
             losses.append(loss.cpu())
             
     return points_log, losses
+
+if __name__ == '__main__':
+    points = torch.randint(0, 48, [5, 2]).to(torch.float)
+    print(points)
+    plot_line = PlotLine(48)
+    conv2cent = Conv2Central()
+    #inputs = Variable(points.unsqueeze(0), requires_grad=True)
+    inputs = points.unsqueeze(0)
+    canvas = plot_line(inputs)
+    print(canvas.size())
+    sns.heatmap(canvas.detach().numpy()[0])
+    print(canvas.max())
+    plt.show()
+    canvas2 = conv2cent(canvas)
+    print(canvas2.size())
+    sns.heatmap(canvas2.detach().numpy()[0])
+    print(canvas2.max())
+    plt.show()
+    canvas3 = torch.tanh(canvas + 2.*canvas2/canvas2.max())
+    sns.heatmap(canvas3.detach().numpy()[0])
+    print(canvas3.max())
+    plt.show()

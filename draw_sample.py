@@ -9,7 +9,7 @@ from pyserial_servos2 import send
 
 arm = MyLink(75, 75)
 
-xs = torch.randint(60, 125, [5, 1]).to(torch.float)
+xs = torch.randint(60, 125, [5, 1]).to(torch.float) # x方向には35mm分板が飛び出ている. 補完のことを考えると, 50~60mmの余裕が必要か.
 ys = torch.randint(-35, 35, [5, 1]).to(torch.float)
 points = torch.cat((xs, ys), dim=1)
 print(points)
@@ -36,17 +36,7 @@ print(th.shape)
 
 th = np.concatenate([start, th, end], 0)
 print(th.shape)
-th = th.round() #.astype(np.int32)
-
-# th = np.array([[45,  5,  25],# サーボ1, サーボ2は0度までは動けない.
-#                     [90,  5,  25],
-#                     [45,  5,  25],
-#                     [ 5,  5,  25],
-#                     [ 5, 45,  25],
-#                     [ 5, 90,  25],
-#                     [ 5, 45,  25],
-#                     [ 5,  5,  25],
-#                     [ 5,  5,  0]])
+th = th.round()
 
 send(th)
 
