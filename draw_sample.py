@@ -9,14 +9,20 @@ from pyserial_servos2 import send
 
 arm = MyLink(75, 75)
 
-xs = torch.randint(60, 125, [5, 1]).to(torch.float) # x方向には35mm分板が飛び出ている. 補完のことを考えると, 50~60mmの余裕が必要か.
-ys = torch.randint(-35, 35, [5, 1]).to(torch.float)
-points = torch.cat((xs, ys), dim=1)
+# xs = torch.randint(60, 125, [5, 1]).to(torch.float) # x方向には35mm分板が飛び出ている. 補完のことを考えると, 50~60mmの余裕が必要か.
+# ys = torch.randint(-35, 35, [5, 1]).to(torch.float)
+# points = torch.cat((xs, ys), dim=1)
+points = torch.tensor([[70, 40],
+                       [110, 40],
+                       [110, -40],
+                       [70, -40],
+                       [70, 40],])
+
 print(points)
 points = points.detach().numpy().T
 print(points)
 px, py = points
-p = complement(points,100,2)
+p = complement(points,100,1)
 x, y = p
 
 th = arm.ik(p)
@@ -30,7 +36,7 @@ start = np.concatenate([th[0],[0]], 0)[None, :]
 end = np.concatenate([th[-1],[0]], 0)[None, :]
 
 H, W = th.shape
-th_3 = np.full((H, 1), 25)
+th_3 = np.full((H, 1), 55)
 th = np.concatenate([th, th_3], 1)
 print(th.shape)
 

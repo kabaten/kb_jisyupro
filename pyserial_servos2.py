@@ -58,7 +58,7 @@ def send(cmds_np):
     for cmd in cmds_list:
         angle1, angle2, angle3 = cmd
         ser.write(str.encode(f"{angle1},{angle2},{angle3},\0"))
-        print(f"{angle1},{angle2},{angle3},\0")
+        #print(f"{angle1},{angle2},{angle3},\0")
         time.sleep(0.1)
 
 if __name__ == '__main__':
