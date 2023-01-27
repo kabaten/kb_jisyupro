@@ -13,44 +13,13 @@ from complement import complement
 from kinematics import MyLink
 from pyserial_servos2 import send
 
-"""
-DATADIR = "../data/hiragana73"
-CATEGORIES = ['a']
-train_dataset, valid_dataset = make_hiragana_dataset(DATADIR, CATEGORIES)
-# バッチサイズの指定
-batch_size = 1
-# DataLoaderを作成
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-# 動作確認
-# イテレータに変換
-batch_iterator = iter(train_dataloader)
-# 1番目の要素を取り出す
-inputs, labels = next(batch_iterator)
-# sns.heatmap(labels.detach().numpy()[0])
-# plt.show()
-
-
-img_size = 48
-n_point = 20
-
-a_gen = Generator6(img_size, n_point, w_m=0.25, w_M=9.)
-# disc = Discriminator3(img_size)
-# losses, errors, distances, distributions = train1(gen, disc, inputs, labels, iteration=2000, lr=0.005)
-
-a_gen.load_state_dict(torch.load('gen_a_params.pth', map_location=torch.device('cpu')))
-a_gen = a_gen.eval()
-xyw = a_gen(inputs)
-"""
-
-path = '../star.jpg'
-image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-src = (~image)/255
-inputs = torch.from_numpy(make_input3(src)).type(torch.float32)
-#sns.heatmap(inputs.cpu().detach().numpy()[0, -1])
+tgt = 'u'
 
 mask = nn.Transformer.generate_square_subsequent_mask(16).T
 gen_ = Generator8_2(w_m=0, w_M=4, mask=mask)
-gen_.load_state_dict(torch.load("../model/star2/best.pt"))
+gen_.load_state_dict(torch.load("../model/" + tgt + "/best.pt"))
+
+inputs = torch.load("../model/" + tgt + "/input.pt")
 
 xyw = gen_(inputs)
 # xyw = torch.tensor([[[23.5, 23.5, 1.],
@@ -95,7 +64,7 @@ W = 75/47*np.array([[1.0],[-1.0]])
 b = np.array([[87.5],[0]])
 
 xy = W*xy + b
-print(xy)
+#print(xy)
 #breakpoint()
 #xy = xy + b
 #xy = xy + np.array([[12.5],[0]])

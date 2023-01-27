@@ -1,19 +1,18 @@
-# https://tkstock.site/2022/05/29/python-pytorch-mydataset-dataloader/
-
 import torch
-import torchvision
-from torchvision import datasets,transforms
 from torch.utils.data import Dataset, DataLoader
 
-from PIL import Image
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-import seaborn as sns
 
 import sys, os
 sys.path.append('..')
+
+# 以下のひらがなデータセットを利用する
+# https://github.com/ndl-lab/hiragana_mojigazo
+
+# 以下のサイトを参考にした。
+# https://tkstock.site/2022/05/29/python-pytorch-mydataset-dataloader/
 
 class HiraganaDataset(Dataset):
     def __init__(self, df):
@@ -37,16 +36,13 @@ class HiraganaDataset(Dataset):
         image = np.array(image)
         image = ~image
         _, image = cv2.threshold(image, 0, 1, cv2.THRESH_OTSU)
-        image = image.astype(np.float32) # Dataloader で使うために転置する?
+        image = image.astype(np.float32)
 
         img_size, _ = image.shape
-        # ax = np.array(range(0, img_size))
         ax = np.array(range(1, img_size+1))
         X, Y = np.meshgrid(ax, ax)
-        ###
         X = X*image
         Y = Y*image
-        ###
         data = np.stack([X, Y, image]).astype(np.float32)
         
         # label はここでは自分自身
@@ -106,7 +102,18 @@ def make_hiragana_dataset(DATADIR, CATEGORIES=None, ratio=0.7, num_sample=1000):
 
     return train_dataset, valid_dataset
 
-def make_input3(imgs): # np[N,48,48] -> np[N,3,48,48]
+# その他の画像を利用する場合
+def make_input(imgs):
+    """
+    画像から入力データを作る関数(np[N,48,48] -> np[N,3,48,48])
+    以下のような利用を想定している。
+
+    >> path = 'image.jpg'
+    >> image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    >> src = (~image)/255
+    >> inputs = torch.from_numpy(make_input(src)).type(torch.float32)
+    >> labels = inputs[:, -1]
+    """
     if len(imgs.shape) > 2:
         N, img_size, _ = imgs.shape
     else:
@@ -123,24 +130,3 @@ def make_input3(imgs): # np[N,48,48] -> np[N,3,48,48]
 
     data = np.concatenate([Xs, Ys, imgs], 1)
     return data
-
-
-if __name__ == '__main__':
-    DATADIR = "../data/hiragana73"
-    CATEGORIES = ['a', 'i', 'u', 'e', 'o']
-    train_dataset, valid_dataset = make_hiragana_dataset(DATADIR, CATEGORIES)
-    # バッチサイズの指定
-    batch_size = 10
-    # DataLoaderを作成
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True)
-    # 辞書にまとめる
-    dataloaders_dict = {'train': train_dataloader, 'valid': valid_dataloader}
-    # 動作確認
-    # イテレータに変換
-    batch_iterator = iter(dataloaders_dict['train'])
-    # 1番目の要素を取り出す
-    inputs, labels = next(batch_iterator)
-    print(inputs.size())
-    print(labels.size())
-    print(inputs.dtype)

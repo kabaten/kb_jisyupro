@@ -21,6 +21,22 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from hiragana_dataset import make_hiragana_dataset
+import glob
+
+def torch_fix_seed():
+    """
+    ランダム値の生成を固定する。
+    """
+    seed = 42
+    # Python random
+    random.seed(seed)
+    # Numpy
+    np.random.seed(seed)
+    # Pytorch
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms = True
 
 # 1文字に専念
 def train1(gen, disc, inputs, labels, iteration=2000, lr=0.005):
@@ -312,7 +328,6 @@ def train1_schedule3(gen, disc, inputs, labels, iteration=2000, start_factor=1, 
     # return losses
     return losses, errors, distances
 
-
 # 1文字に専念:scheduler付き, 加えるノイズを段階的に下げていく
 def train1_schedule4(gen, disc, inputs, labels, iteration=2000, start_factor=1, end_factor=0.001, total_iters=20, start_p=0.5, alpha=400, beta=50):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -372,13 +387,18 @@ def train1_schedule4(gen, disc, inputs, labels, iteration=2000, start_factor=1, 
     # return losses
     return losses, errors, distances
 
-# 1文字に専念:scheduler付き, 分割あり->ノイズ付加，段階的に下げていく．分割あり->ノイズ無し
+# 1文字に専念:scheduler付き, 分割あり->ノイズ付加，段階的に下げていく．分割なし->ノイズ少なく
 from dfs import how_many_island
-import functools
 
-def train1_schedule5(gen, disc, inputs, labels, iteration=2000, start_factor=1, end_factor=0.001, total_iters=20, start_p=0.5, alpha=400, beta=50):
+def train1_schedule5(gen, disc, inputs, labels,
+    iteration=2000, start_factor=1, end_factor=0.001, total_iters=20, 
+    start_p=0.5, alpha=400, beta=50,
+    folder="model"):
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'using: {device}')
+
+    torch_fix_seed()
 
     def add_noise(x, p):
         flatten = nn.Flatten()
@@ -398,19 +418,159 @@ def train1_schedule5(gen, disc, inputs, labels, iteration=2000, start_factor=1, 
     optimizer=optim.Adadelta(gen.parameters(), lr=start_factor)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=start_factor, end_factor=end_factor, total_iters=total_iters)
     
-    # points_log = []
-    # plot_log = []
     losses = []
 
     gen = gen.train()
 
-    split = (how_many_island(labels.cpu().detach().tolist()) > 1)
-    #print("split:", split)
+    split = (how_many_island(labels.cpu().detach().tolist()[0]) > 1) #!
+    print("split:", split)
 
     if not split:
         start_p = start_p/4
         alpha = alpha/4
+        beta = beta/2
     
+    min_loss = 999999999.9
+    avg_loss = 0.
+    for i in range(iteration):
+        p = start_p*np.exp(-i/alpha)*(np.cos(np.pi*i/beta) + 1) #振動させる
+        labels_ = add_noise(labels, p)
+        
+        optimizer.zero_grad()
+        
+        points = gen(inputs)
+        
+        loss = disc(points, labels_)
+        
+        loss.backward()
+    
+        optimizer.step()
+
+        losses.append(loss.cpu().detach().numpy())
+        avg_loss += loss.detach().item()
+
+        if (i+1)%100 == 0:
+            avg_loss = avg_loss/100
+            print(f'iter: {i+1}, loss: {avg_loss}')
+            scheduler.step()
+
+            if avg_loss < min_loss:
+                min_loss = avg_loss
+                model_list = glob.glob("../model/"+folder+"/*")
+                for prev_model in model_list:
+                    os.remove(prev_model)
+                torch.save(gen.state_dict(), "../model/"+folder+"/best.pt")
+            
+            avg_loss = 0
+    
+    errors = disc.error_log
+    distances = disc.distance_log
+
+    return losses, errors, distances
+
+
+# 分裂の判別なし
+def train1_schedule5_2(gen, disc, inputs, labels,
+    iteration=2000, start_factor=1, end_factor=0.001, total_iters=20, 
+    start_p=0.5, alpha=400, beta=50,
+    folder="model"):
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f'using: {device}')
+
+    torch_fix_seed()
+
+    def add_noise(x, p):
+        flatten = nn.Flatten()
+        x_noise = x.clone()
+        original_shape = x_noise.shape
+        x_noise = flatten(x_noise)
+        length = x_noise.shape[-1]
+        tgt_num = int(length*p)
+        tgt = np.random.choice(length, tgt_num, replace=False)
+        x_noise[:, tgt] = 1.0
+        x_noise = x_noise.reshape(*original_shape)
+        return x_noise
+    
+    gen = gen.to(device)
+    disc = disc.to(device)
+    
+    optimizer=optim.Adadelta(gen.parameters(), lr=start_factor)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=start_factor, end_factor=end_factor, total_iters=total_iters)
+    
+    losses = []
+
+    gen = gen.train()
+    
+    min_loss = 999999999.9
+    avg_loss = 0.
+    for i in range(iteration):
+        p = start_p*np.exp(-i/alpha)*(np.cos(np.pi*i/beta) + 1) #振動させる
+        labels_ = add_noise(labels, p)
+        
+        optimizer.zero_grad()
+        
+        points = gen(inputs)
+        
+        loss = disc(points, labels_)
+        
+        loss.backward()
+    
+        optimizer.step()
+
+        losses.append(loss.cpu().detach().numpy())
+        avg_loss += loss.detach().item()
+
+        if (i+1)%100 == 0:
+            avg_loss = avg_loss/100
+            print(f'iter: {i+1}, loss: {avg_loss}')
+            scheduler.step()
+
+            if avg_loss < min_loss:
+                min_loss = avg_loss
+                model_list = glob.glob("../model/"+folder+"/*")
+                for prev_model in model_list:
+                    os.remove(prev_model)
+                torch.save(gen.state_dict(), "../model/"+folder+"/best.pt")
+            
+            avg_loss = 0
+    
+    errors = disc.error_log
+    distances = disc.distance_log
+
+    return losses, errors, distances
+
+
+def train1_schedule6(gen, disc, inputs, labels, iteration=2000, start_factor=1, end_factor=0.001, total_iters=20, start_p=0.5, alpha=400, beta=50):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f'using: {device}')
+
+    torch_fix_seed()
+
+    def add_noise(x, p):
+        flatten = nn.Flatten()
+        x_noise = x.clone()
+        original_shape = x_noise.shape
+        x_noise = flatten(x_noise)
+        length = x_noise.shape[-1]
+        tgt_num = int(length*p)
+        tgt = np.random.choice(length, tgt_num, replace=False)
+        x_noise[:, tgt] = 1.0
+        x_noise = x_noise.reshape(*original_shape)
+        return x_noise
+    
+    gen = gen.to(device)
+    disc = disc.to(device)
+    inputs.to(device)
+    labels.to(device)
+    
+    optimizer=optim.Adadelta(gen.parameters(), lr=start_factor)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=start_factor, end_factor=end_factor, total_iters=total_iters)
+    
+    losses = []
+
+    gen = gen.train()
+
     for i in range(iteration):
         p = start_p*np.exp(-i/alpha)*(np.cos(np.pi*i/beta) + 1) #振動させる
         labels_ = add_noise(labels, p)
@@ -432,12 +592,8 @@ def train1_schedule5(gen, disc, inputs, labels, iteration=2000, start_factor=1, 
     
     errors = disc.error_log
     distances = disc.distance_log
-    #distributions = disc.distribution_log
-            
-    # return points_log, plot_log, losses, errors, distances, distributions
-    # return losses
+    
     return losses, errors, distances
-
 
 # 汎用化の試み
 def train_loop(gen, disc, opt, train_dataloader, device, augment=True):
@@ -514,3 +670,4 @@ def train(gen, disc, DATADIR, CATEGORIES=None, batch_size=100, num_epochs=30, lr
         #     torch.save(model.state_dict(), "../model/best.pt")
 
     return train_loss_list, validation_loss_list
+
