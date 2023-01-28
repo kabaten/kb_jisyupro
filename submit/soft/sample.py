@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
+import torch.nn as nn
+import cv2
 import sys
 sys.path.append('..')
 
@@ -26,7 +28,7 @@ disc = Discriminator(img_size)
 
 mask = nn.Transformer.generate_square_subsequent_mask(16).T
 
-gen = Generator(w_m=0, w_M=4, mask=mask) #bridge a600b50
+gen = Generator(w_m=0, w_M=4, mask=mask)
 losses, errors, distances = train(
     gen, disc, inputs, labels, 
     iteration=5000, start_factor=0.1, end_factor=0.8, total_iters=40, 
